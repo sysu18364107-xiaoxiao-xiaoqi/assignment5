@@ -86,14 +86,16 @@ class MyDataset(Dataset):
         image_tensor = self.transforms(image)
         return image_tensor,self.image_label_list[index]
 
-batch_size = 16
+batch_size = 46
 num_workers = 0
 train_dataset = MyDataset(mode='train',label_file='/home/yewei/assignment5exp/list_image_category_status.txt')
 test_dataset = MyDataset(mode='test',label_file='/home/yewei/assignment5exp/list_image_category_status.txt')
+val_dataset = MyDataset(mode='val',label_file='/home/yewei/assignment5exp/list_image_category_status.txt')
 train_iter = torch.utils.data.DataLoader(train_dataset,batch_size=batch_size,shuffle=True, num_workers=num_workers)
 test_iter = torch.utils.data.DataLoader(test_dataset,batch_size=batch_size,shuffle=True,num_workers=num_workers)
+val_iter = torch.utils.data.DataLoader(val_dataset,batch_size=batch_size,shuffle=True,num_workers=num_workers)
 
-device = torch.device('cuda:1')
+device = torch.device('cuda:0')
 
 model_path = '/home/yewei/assignment5exp/pretrained_models/resnet50-19c8e357.pth'
 model = resnet.MyResnet(model_path=model_path,num_classes=46).to(device)
@@ -106,9 +108,11 @@ num_epochs = 50
 loss_exp = []
 train_acc = []
 test_acc = []
+val_acc = []
 for epoch in range(num_epochs):
-    train_l_sum,train_acc_sum,test_acc_sum,train_n,test_n = 0.0,0.0,0.0,0,0
+    train_l_sum,train_acc_sum,val_l_sum,val_acc_sum,test_acc_sum,train_n,test_n,val_n = 0.0,0.0,0.0,0.0,0.0,0,0,0
     for X,y in train_iter:
+        model.train()
         X=X.to(device)
         y=y.to(device)
         y_hat = model(X)
@@ -122,20 +126,32 @@ for epoch in range(num_epochs):
         train_l_sum += l.item()
         train_acc_sum += (y_hat[1].argmax(dim=1)==y).sum().item()
         train_n += y.shape[0]
-
-    for X,y in test_iter:
+    
+    for X,y in val_iter:
+        val_acc_sum,val_n = 0.0,0
+        model.eval()
         X = X.to(device)
         y = y.to(device)
-        test_acc_sum += (model(X)[1].argmax(dim=1)==y).sum().item()
-        test_n +=y.shape[0]
+        val_acc_sum += (model(X)[1].argmax(dim=1)==y).sum().item()
+        val_n +=y.shape[0]
 
     loss_exp.append(train_l_sum/train_n)
     train_acc.append(train_acc_sum/train_n)
-    test_acc.append(test_acc_sum)
+    val_acc.append(val_acc_sum/val_n)
     logger.log_value('loss_exp', train_l_sum/train_n, epoch+1)
     logger.log_value('train_acc', train_acc_sum/train_n, epoch+1)
-    logger.log_value('test_acc', test_acc_sum/test_n, epoch+1)
-    print('epoch %d, loss %.4f, train acc %.3f, test acc %.3f'
-    %(epoch+1,train_l_sum/train_n,train_acc_sum/train_n,test_acc_sum/test_n))
+    logger.log_value('val_acc', val_acc_sum/val_n, epoch+1)
+    print('epoch %d, loss %.4f, train acc %.3f, val acc %.3f,'
+    %(epoch+1,train_l_sum/train_n,train_acc_sum/train_n,val_acc_sum/val_n))  
+    
 
-
+for X,y in test_iter:
+    test_acc_sum,test_n = 0.0,0
+    model.eval()
+    X = X.to(device)
+    y = y.to(device)
+    test_acc_sum += (model(X)[1].argmax(dim=1)==y).sum().item()
+    test_n +=y.shape[0]
+    test_acc.append(test_acc_sum/test_n)
+    #logger.log_value('test_acc', test_acc_sum/test_n, epoch+1)
+    print('test acc %.3f'%(test_acc_sum/test_n))
