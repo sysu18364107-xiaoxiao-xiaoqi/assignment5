@@ -158,3 +158,4 @@ for X,y in test_iter:
     print('test acc %.3f'%(test_acc_sum/test_n))
 
 
+ 
